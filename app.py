@@ -61,37 +61,30 @@ if uploaded_file:
             ]
 
             if not filtered_df.empty:
-                # Create Sankey Diagram
+                # Define nodes (System From → Technology → System To)
                 unique_nodes = pd.unique(filtered_df[['System From', 'Technology', 'System To']].values.ravel())
                 node_indices = {node: i for i, node in enumerate(unique_nodes)}
 
-                # Create links (System From → Technology → System To)
-                links_from_to_tech = filtered_df[['System From', 'Technology']].drop_duplicates()
-                links_tech_to_to = filtered_df[['Technology', 'System To']].drop_duplicates()
+                # Create Sankey links
+                sankey_links = []
 
-                # Map indices
-                links_from_to_tech['source_idx'] = links_from_to_tech['System From'].map(node_indices)
-                links_from_to_tech['target_idx'] = links_from_to_tech['Technology'].map(node_indices)
-                links_tech_to_to['source_idx'] = links_tech_to_to['Technology'].map(node_indices)
-                links_tech_to_to['target_idx'] = links_tech_to_to['System To'].map(node_indices)
+                for _, row in filtered_df.iterrows():
+                    source_idx = node_indices[row["System From"]]
+                    tech_idx = node_indices[row["Technology"]]
+                    target_idx = node_indices[row["System To"]]
 
-                # Assign default value (weight) for links
-                links_from_to_tech['value'] = 1
-                links_tech_to_to['value'] = 1
+                    sankey_links.append({"source": source_idx, "target": tech_idx, "value": 5})  # Stronger weight
+                    sankey_links.append({"source": tech_idx, "target": target_idx, "value": 5})
 
-                # Combine both sets of links
-                sankey_links = pd.concat([links_from_to_tech, links_tech_to_to])
+                # Extract source, target, and value for Plotly
+                sources = [link["source"] for link in sankey_links]
+                targets = [link["target"] for link in sankey_links]
+                values = [link["value"] for link in sankey_links]
 
                 # Create the Sankey diagram
                 fig = go.Figure(data=[go.Sankey(
-                    node=dict(
-                        pad=15, thickness=20, label=list(unique_nodes)
-                    ),
-                    link=dict(
-                        source=sankey_links['source_idx'], 
-                        target=sankey_links['target_idx'], 
-                        value=sankey_links['value']
-                    )
+                    node=dict(pad=15, thickness=20, label=list(unique_nodes)),
+                    link=dict(source=sources, target=targets, value=values)
                 )])
 
                 fig.update_layout(title_text="System Integration Lineage", font_size=12)
