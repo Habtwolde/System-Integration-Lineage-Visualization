@@ -35,14 +35,20 @@ if uploaded_file:
         col1, col2 = st.columns(2)
 
         with col1:
-            system_from = st.selectbox("System From", system_from_options)
-            batch_job = st.selectbox("Batch Job Name", batch_job_options)
-            db_from = st.selectbox("Database/Process From", db_from_options)
+            st.markdown("**System From**")  # Add label
+            system_from = st.selectbox("Select System From", system_from_options)
+            st.markdown("**Batch Job Name**")  # Add label
+            batch_job = st.selectbox("Select Batch Job Name", batch_job_options)
+            st.markdown("**Database/Process From**")  # Add label
+            db_from = st.selectbox("Select Database/Process From", db_from_options)
 
         with col2:
-            system_to = st.selectbox("System To", system_to_options)
-            technology = st.selectbox("Technology", technology_options)
-            db_to = st.selectbox("Database/Process To", db_to_options)
+            st.markdown("**System To**")  # Add label
+            system_to = st.selectbox("Select System To", system_to_options)
+            st.markdown("**Technology**")  # Add label
+            technology = st.selectbox("Select Technology", technology_options)
+            st.markdown("**Database/Process To**")  # Add label
+            db_to = st.selectbox("Select Database/Process To", db_to_options)
 
         if st.button("Submit"):
             # Filter data based on selections
