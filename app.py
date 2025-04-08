@@ -15,9 +15,6 @@ uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx"])
 
 if uploaded_file:
     df = load_data(uploaded_file)
-    
-    # Debugging: Show column names
-    # st.write("Columns in the uploaded file:", df.columns.tolist())
 
     # Check if columns exist
     required_columns = ["System From", "System To", "Batch Job Name", "Technology", "Database/Process From", "Database/Process To"]
@@ -59,32 +56,30 @@ if uploaded_file:
             ]
 
             if not filtered_df.empty:
-                # Create Sankey Diagram
-                # Add Technology as a node in the Sankey diagram
+                # Create nodes: "System From" -> "Technology" -> "System To"
                 nodes = pd.unique(filtered_df[['System From', 'Technology', 'System To']].values.ravel())
                 node_indices = {node: i for i, node in enumerate(nodes)}
 
+                # Map node indices
                 filtered_df['source_idx'] = filtered_df['System From'].map(node_indices)
                 filtered_df['tech_idx'] = filtered_df['Technology'].map(node_indices)
                 filtered_df['target_idx'] = filtered_df['System To'].map(node_indices)
 
-                # Create links for the Sankey diagram
-                # Two links: one from "System From" to "Technology", another from "Technology" to "System To"
-                sankey_links = pd.concat([
-                    filtered_df[['source_idx', 'tech_idx']].assign(value=1),
-                    filtered_df[['tech_idx', 'target_idx']].assign(value=1)
-                ], ignore_index=True)
+                # Sankey links: From System → Technology → System To
+                sankey_links_1 = filtered_df[['source_idx', 'tech_idx']]
+                sankey_links_2 = filtered_df[['tech_idx', 'target_idx']]
 
-                # Plotting Sankey
+                sankey_links = pd.concat([sankey_links_1, sankey_links_2]).dropna().reset_index(drop=True)
+                sankey_links = sankey_links.groupby([sankey_links.columns[0], sankey_links.columns[1]]).size().reset_index(name='value')
+
+                # Create Sankey Diagram
                 fig = go.Figure(data=[go.Sankey(
                     node=dict(
-                        pad=15, 
-                        thickness=20, 
-                        label=nodes
+                        pad=15, thickness=20, label=list(nodes)
                     ),
                     link=dict(
-                        source=sankey_links['source_idx'],
-                        target=sankey_links['target_idx'],
+                        source=sankey_links.iloc[:, 0],  
+                        target=sankey_links.iloc[:, 1],  
                         value=sankey_links['value']
                     )
                 )])
