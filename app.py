@@ -56,30 +56,33 @@ if uploaded_file:
             ]
 
             if not filtered_df.empty:
-                # Define nodes: Add System From and System To as nodes
-                unique_nodes = pd.unique(filtered_df[['System From', 'System To']].values.ravel())
+                # Define nodes: Add Technology as a middle node
+                unique_nodes = pd.unique(filtered_df[['System From', 'Technology', 'System To']].values.ravel())
                 node_indices = {node: i for i, node in enumerate(unique_nodes)}
 
                 # Add source and target indices based on the node mapping
                 filtered_df['source_idx'] = filtered_df['System From'].map(node_indices)
+                filtered_df['technology_idx'] = filtered_df['Technology'].map(node_indices)
                 filtered_df['target_idx'] = filtered_df['System To'].map(node_indices)
 
-                # Create unique color map for each source-target pair
-                unique_pairs = filtered_df[['System From', 'System To']].drop_duplicates()
-                color_map = {tuple(pair): f'rgba({(i*40)%255}, {(i*80)%255}, {(i*120)%255}, 0.6)' for i, pair in enumerate(unique_pairs.values)}
-
-                # Create Sankey links: One for each pair of System From -> System To
+                # Create Sankey links: Including links from System From -> Technology -> System To
                 sankey_links = []
                 for _, row in filtered_df.iterrows():
-                    pair = (row['System From'], row['System To'])
-                    color = color_map[pair]
-                    sankey_links.append({"source": row['source_idx'], "target": row['target_idx'], "value": 5, "color": color})
+                    # Link from System From to Technology
+                    sankey_links.append({"source": row['source_idx'], "target": row['technology_idx'], "value": 5})
+                    # Link from Technology to System To
+                    sankey_links.append({"source": row['technology_idx'], "target": row['target_idx'], "value": 5})
 
-                # Extract source, target, value, and color for Plotly
+                # Define a color for each technology
+                color_map = {tech: f'rgba({i*40 % 255}, {i*80 % 255}, {i*120 % 255}, 0.6)' for i, tech in enumerate(filtered_df["Technology"].unique())}
+
+                # Assign colors to links based on the technology
+                link_colors = [color_map[row["Technology"]] for _, row in filtered_df.iterrows() for _ in range(2)]
+
+                # Extract source, target, value for Plotly
                 sources = [link["source"] for link in sankey_links]
                 targets = [link["target"] for link in sankey_links]
                 values = [link["value"] for link in sankey_links]
-                link_colors = [link["color"] for link in sankey_links]
 
                 # Create the Sankey diagram
                 fig = go.Figure(data=[go.Sankey(
