@@ -11,6 +11,9 @@ def load_data(uploaded_file):
         # Normalize column names (remove leading/trailing spaces)
         df.columns = df.columns.str.strip()
         
+        # Print the actual column names for debugging
+        st.write("Actual columns in the uploaded file:", df.columns.tolist())
+        
         return df
     except Exception as e:
         st.error(f"Error loading file: {e}")
