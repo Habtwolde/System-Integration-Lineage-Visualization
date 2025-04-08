@@ -16,7 +16,7 @@ uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx"])
 if uploaded_file:
     df = load_data(uploaded_file)
 
-    # Check if columns exist
+    # Check if required columns exist
     required_columns = ["System From", "System To", "Batch Job Name", "Technology", "Database/Process From", "Database/Process To"]
     missing_columns = [col for col in required_columns if col not in df.columns]
 
@@ -56,26 +56,33 @@ if uploaded_file:
             ]
 
             if not filtered_df.empty:
-                # Create nodes: "System From" -> "Technology" -> "System To"
-                nodes = pd.unique(filtered_df[['System From', 'Technology', 'System To']].values.ravel())
+                # Create unique nodes
+                nodes = list(pd.unique(filtered_df[['System From', 'Technology', 'System To']].values.ravel()))
                 node_indices = {node: i for i, node in enumerate(nodes)}
 
-                # Map node indices
+                # Map source, technology, and target indices
                 filtered_df['source_idx'] = filtered_df['System From'].map(node_indices)
                 filtered_df['tech_idx'] = filtered_df['Technology'].map(node_indices)
                 filtered_df['target_idx'] = filtered_df['System To'].map(node_indices)
 
-                # Sankey links: From System → Technology → System To
+                # Sankey links: "System From → Technology" and "Technology → System To"
                 sankey_links_1 = filtered_df[['source_idx', 'tech_idx']]
                 sankey_links_2 = filtered_df[['tech_idx', 'target_idx']]
 
-                sankey_links = pd.concat([sankey_links_1, sankey_links_2]).dropna().reset_index(drop=True)
-                sankey_links = sankey_links.groupby([sankey_links.columns[0], sankey_links.columns[1]]).size().reset_index(name='value')
+                # Concatenate the links
+                sankey_links = pd.concat([sankey_links_1, sankey_links_2]).reset_index(drop=True)
+                sankey_links['value'] = 1  # Assign a default value for flow
+
+                # Debugging Option: Display Node Mapping
+                if st.checkbox("Show Debugging Info"):
+                    st.write("Nodes:", nodes)
+                    st.write("Node Indices:", node_indices)
+                    st.write("Sankey Links:", sankey_links)
 
                 # Create Sankey Diagram
                 fig = go.Figure(data=[go.Sankey(
                     node=dict(
-                        pad=15, thickness=20, label=list(nodes)
+                        pad=15, thickness=20, label=nodes, color="blue"
                     ),
                     link=dict(
                         source=sankey_links.iloc[:, 0],  
