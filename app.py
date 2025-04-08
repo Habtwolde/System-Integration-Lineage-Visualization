@@ -65,8 +65,12 @@ if uploaded_file:
                 unique_nodes = pd.unique(filtered_df[['System From', 'Technology', 'System To']].values.ravel())
                 node_indices = {node: i for i, node in enumerate(unique_nodes)}
 
-                # Create Sankey links
+                # Create Sankey links and colors
                 sankey_links = []
+                link_colors = []
+
+                # Define a color for each technology to identify each line
+                color_map = {tech: f'rgba({i*40 % 255}, {i*80 % 255}, {i*120 % 255}, 0.6)' for i, tech in enumerate(filtered_df["Technology"].unique())}
 
                 for _, row in filtered_df.iterrows():
                     source_idx = node_indices[row["System From"]]
@@ -80,6 +84,9 @@ if uploaded_file:
                     # Add a direct link from System From to System To (direct connection)
                     sankey_links.append({"source": source_idx, "target": target_idx, "value": 5})  # Direct link
 
+                    # Color the links based on the technology
+                    link_colors.extend([color_map[row["Technology"]]] * 3)  # Add color for each link
+
                 # Extract source, target, and value for Plotly
                 sources = [link["source"] for link in sankey_links]
                 targets = [link["target"] for link in sankey_links]
@@ -88,7 +95,7 @@ if uploaded_file:
                 # Create the Sankey diagram
                 fig = go.Figure(data=[go.Sankey(
                     node=dict(pad=15, thickness=20, label=list(unique_nodes)),
-                    link=dict(source=sources, target=targets, value=values)
+                    link=dict(source=sources, target=targets, value=values, color=link_colors)  # Add color to links
                 )])
 
                 fig.update_layout(title_text="System Integration Lineage", font_size=12)
