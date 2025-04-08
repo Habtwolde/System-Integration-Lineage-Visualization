@@ -23,70 +23,73 @@ if uploaded_file:
     if missing_columns:
         st.error(f"Missing columns in uploaded file: {', '.join(missing_columns)}")
     else:
-        # Create dropdown options
+        # Create dropdown options based on uploaded data
         system_from_options = df["System From"].dropna().unique()
-        system_to_options = df["System To"].dropna().unique()
-        batch_job_options = df["Batch Job Name"].dropna().unique()
-        technology_options = df["Technology"].dropna().unique()
-        db_from_options = df["Database/Process From"].dropna().unique()
-        db_to_options = df["Database/Process To"].dropna().unique()
+        
+        # User selects 'System From' first
+        system_from = st.selectbox("System From", system_from_options)
+
+        # Filter data based on selected 'System From'
+        filtered_df = df[df["System From"] == system_from]
+
+        batch_job_options = filtered_df["Batch Job Name"].dropna().unique()
+        technology_options = filtered_df["Technology"].dropna().unique()
+        system_to_options = filtered_df["System To"].dropna().unique()
+        db_from_options = filtered_df["Database/Process From"].dropna().unique()
+        db_to_options = filtered_df["Database/Process To"].dropna().unique()
 
         # Two-column layout
         col1, col2 = st.columns(2)
 
         with col1:
-            system_from = st.selectbox("System From", system_from_options)
             batch_job = st.selectbox("Batch Job Name", batch_job_options)
             db_from = st.selectbox("Database/Process From", db_from_options)
 
         with col2:
-            system_to = st.selectbox("System To", system_to_options)
             technology = st.selectbox("Technology", technology_options)
+            system_to = st.selectbox("System To", system_to_options)
             db_to = st.selectbox("Database/Process To", db_to_options)
 
         if st.button("Submit"):
-            # Filter data based on selections
-            filtered_df = df[
-                (df["System From"] == system_from) &
-                (df["System To"] == system_to) &
-                (df["Batch Job Name"] == batch_job) &
-                (df["Technology"] == technology) &
-                (df["Database/Process From"] == db_from) &
-                (df["Database/Process To"] == db_to)
+            # Apply filters
+            filtered_df = filtered_df[
+                (filtered_df["System To"] == system_to) &
+                (filtered_df["Batch Job Name"] == batch_job) &
+                (filtered_df["Technology"] == technology) &
+                (filtered_df["Database/Process From"] == db_from) &
+                (filtered_df["Database/Process To"] == db_to)
             ]
 
             if not filtered_df.empty:
-                # Create unique nodes
-                nodes = list(pd.unique(filtered_df[['System From', 'Technology', 'System To']].values.ravel()))
-                node_indices = {node: i for i, node in enumerate(nodes)}
-
-                # Map source, technology, and target indices
-                filtered_df['source_idx'] = filtered_df['System From'].map(node_indices)
-                filtered_df['tech_idx'] = filtered_df['Technology'].map(node_indices)
-                filtered_df['target_idx'] = filtered_df['System To'].map(node_indices)
-
-                # Sankey links: "System From → Technology" and "Technology → System To"
-                sankey_links_1 = filtered_df[['source_idx', 'tech_idx']]
-                sankey_links_2 = filtered_df[['tech_idx', 'target_idx']]
-
-                # Concatenate the links
-                sankey_links = pd.concat([sankey_links_1, sankey_links_2]).reset_index(drop=True)
-                sankey_links['value'] = 1  # Assign a default value for flow
-
-                # Debugging Option: Display Node Mapping
-                if st.checkbox("Show Debugging Info"):
-                    st.write("Nodes:", nodes)
-                    st.write("Node Indices:", node_indices)
-                    st.write("Sankey Links:", sankey_links)
-
                 # Create Sankey Diagram
+                unique_nodes = pd.unique(filtered_df[['System From', 'Technology', 'System To']].values.ravel())
+                node_indices = {node: i for i, node in enumerate(unique_nodes)}
+
+                # Create links (System From → Technology → System To)
+                links_from_to_tech = filtered_df[['System From', 'Technology']].drop_duplicates()
+                links_tech_to_to = filtered_df[['Technology', 'System To']].drop_duplicates()
+
+                # Map indices
+                links_from_to_tech['source_idx'] = links_from_to_tech['System From'].map(node_indices)
+                links_from_to_tech['target_idx'] = links_from_to_tech['Technology'].map(node_indices)
+                links_tech_to_to['source_idx'] = links_tech_to_to['Technology'].map(node_indices)
+                links_tech_to_to['target_idx'] = links_tech_to_to['System To'].map(node_indices)
+
+                # Assign default value (weight) for links
+                links_from_to_tech['value'] = 1
+                links_tech_to_to['value'] = 1
+
+                # Combine both sets of links
+                sankey_links = pd.concat([links_from_to_tech, links_tech_to_to])
+
+                # Create the Sankey diagram
                 fig = go.Figure(data=[go.Sankey(
                     node=dict(
-                        pad=15, thickness=20, label=nodes, color="blue"
+                        pad=15, thickness=20, label=list(unique_nodes)
                     ),
                     link=dict(
-                        source=sankey_links.iloc[:, 0],  
-                        target=sankey_links.iloc[:, 1],  
+                        source=sankey_links['source_idx'], 
+                        target=sankey_links['target_idx'], 
                         value=sankey_links['value']
                     )
                 )])
