@@ -79,16 +79,6 @@ if uploaded_file:
                 # Assign colors to links based on the technology
                 link_colors = [color_map[row["Technology"]] for _, row in filtered_df.iterrows() for _ in range(2)]
 
-                # Add descriptive labels to the nodes
-                node_labels = []
-                for node in unique_nodes:
-                    if node == system_from:
-                        node_labels.append(f"System From: {node}")
-                    elif node == system_to:
-                        node_labels.append(f"System To: {node}")
-                    else:
-                        node_labels.append(node)
-
                 # Extract source, target, value for Plotly
                 sources = [link["source"] for link in sankey_links]
                 targets = [link["target"] for link in sankey_links]
@@ -96,11 +86,35 @@ if uploaded_file:
 
                 # Create the Sankey diagram
                 fig = go.Figure(data=[go.Sankey(
-                    node=dict(pad=15, thickness=20, label=node_labels),
+                    node=dict(pad=15, thickness=20, label=list(unique_nodes)),
                     link=dict(source=sources, target=targets, value=values, color=link_colors)  # Add color to links
                 )])
 
-                fig.update_layout(title_text="System Integration Lineage", font_size=12)
+                # Add external annotations for "System From" and "System To"
+                annotations = [
+                    dict(
+                        x=0.1,  # Position relative to the diagram's width (left side)
+                        y=0.5,  # Position relative to the diagram's height (middle)
+                        xref="paper", yref="paper",
+                        text=f"System From: {system_from}",
+                        showarrow=False,
+                        font=dict(size=12, color="black")
+                    ),
+                    dict(
+                        x=0.9,  # Position relative to the diagram's width (right side)
+                        y=0.5,  # Position relative to the diagram's height (middle)
+                        xref="paper", yref="paper",
+                        text=f"System To: {system_to}",
+                        showarrow=False,
+                        font=dict(size=12, color="black")
+                    )
+                ]
+                fig.update_layout(
+                    title_text="System Integration Lineage",
+                    font_size=12,
+                    annotations=annotations
+                )
+
                 st.plotly_chart(fig)
             else:
                 st.warning("No data found for the selected filters!")
