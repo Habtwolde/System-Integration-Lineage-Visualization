@@ -35,20 +35,14 @@ if uploaded_file:
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown("**System From**")  # Add label
-            system_from = st.selectbox("Select System From", system_from_options)
-            st.markdown("**Batch Job Name**")  # Add label
-            batch_job = st.selectbox("Select Batch Job Name", batch_job_options)
-            st.markdown("**Database/Process From**")  # Add label
-            db_from = st.selectbox("Select Database/Process From", db_from_options)
+            system_from = st.selectbox("System From", system_from_options)
+            batch_job = st.selectbox("Batch Job Name", batch_job_options)
+            db_from = st.selectbox("Database/Process From", db_from_options)
 
         with col2:
-            st.markdown("**System To**")  # Add label
-            system_to = st.selectbox("Select System To", system_to_options)
-            st.markdown("**Technology**")  # Add label
-            technology = st.selectbox("Select Technology", technology_options)
-            st.markdown("**Database/Process To**")  # Add label
-            db_to = st.selectbox("Select Database/Process To", db_to_options)
+            system_to = st.selectbox("System To", system_to_options)
+            technology = st.selectbox("Technology", technology_options)
+            db_to = st.selectbox("Database/Process To", db_to_options)
 
         if st.button("Submit"):
             # Filter data based on selections
@@ -85,6 +79,16 @@ if uploaded_file:
                 # Assign colors to links based on the technology
                 link_colors = [color_map[row["Technology"]] for _, row in filtered_df.iterrows() for _ in range(2)]
 
+                # Add descriptive labels to the nodes
+                node_labels = []
+                for node in unique_nodes:
+                    if node == system_from:
+                        node_labels.append(f"System From: {node}")
+                    elif node == system_to:
+                        node_labels.append(f"System To: {node}")
+                    else:
+                        node_labels.append(node)
+
                 # Extract source, target, value for Plotly
                 sources = [link["source"] for link in sankey_links]
                 targets = [link["target"] for link in sankey_links]
@@ -92,7 +96,7 @@ if uploaded_file:
 
                 # Create the Sankey diagram
                 fig = go.Figure(data=[go.Sankey(
-                    node=dict(pad=15, thickness=20, label=list(unique_nodes)),
+                    node=dict(pad=15, thickness=20, label=node_labels),
                     link=dict(source=sources, target=targets, value=values, color=link_colors)  # Add color to links
                 )])
 
