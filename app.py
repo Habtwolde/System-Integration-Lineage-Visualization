@@ -17,7 +17,7 @@ if uploaded_file:
     df = load_data(uploaded_file)
     
     # Debugging: Show column names
-    st.write("Columns in the uploaded file:", df.columns.tolist())
+    # st.write("Columns in the uploaded file:", df.columns.tolist())
 
     # Check if columns exist
     required_columns = ["System From", "System To", "Batch Job Name", "Technology", "Database/Process From", "Database/Process To"]
@@ -60,17 +60,33 @@ if uploaded_file:
 
             if not filtered_df.empty:
                 # Create Sankey Diagram
-                nodes = pd.unique(filtered_df[['System From', 'System To']].values.ravel())
+                # Add Technology as a node in the Sankey diagram
+                nodes = pd.unique(filtered_df[['System From', 'Technology', 'System To']].values.ravel())
                 node_indices = {node: i for i, node in enumerate(nodes)}
 
                 filtered_df['source_idx'] = filtered_df['System From'].map(node_indices)
+                filtered_df['tech_idx'] = filtered_df['Technology'].map(node_indices)
                 filtered_df['target_idx'] = filtered_df['System To'].map(node_indices)
 
-                sankey_links = filtered_df.groupby(['source_idx', 'target_idx']).size().reset_index(name='value')
+                # Create links for the Sankey diagram
+                # Two links: one from "System From" to "Technology", another from "Technology" to "System To"
+                sankey_links = pd.concat([
+                    filtered_df[['source_idx', 'tech_idx']].assign(value=1),
+                    filtered_df[['tech_idx', 'target_idx']].assign(value=1)
+                ], ignore_index=True)
 
+                # Plotting Sankey
                 fig = go.Figure(data=[go.Sankey(
-                    node=dict(pad=15, thickness=20, label=list(nodes)),
-                    link=dict(source=sankey_links['source_idx'], target=sankey_links['target_idx'], value=sankey_links['value'])
+                    node=dict(
+                        pad=15, 
+                        thickness=20, 
+                        label=nodes
+                    ),
+                    link=dict(
+                        source=sankey_links['source_idx'],
+                        target=sankey_links['target_idx'],
+                        value=sankey_links['value']
+                    )
                 )])
 
                 fig.update_layout(title_text="System Integration Lineage", font_size=12)
