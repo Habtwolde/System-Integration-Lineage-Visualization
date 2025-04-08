@@ -1,106 +1,164 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.io as pio
 
-# Load the Excel file
+# Load data function (for illustration purposes, replace this with your actual data loading method)
 @st.cache_data
-def load_data(file):
-    df = pd.read_excel(file, engine="openpyxl")
-    df.columns = df.columns.str.replace(r'\s+', ' ', regex=True).str.strip()  # Fix extra spaces
-    return df
+def load_data():
+    # Replace with your actual data loading logic
+    return pd.read_csv("your_data.csv")
 
-# Upload file
-st.title("System Integration Lineage Visualization")
-uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx"])
+# Load the data
+df = load_data()
 
-if uploaded_file:
-    df = load_data(uploaded_file)
-    
-    # Check if columns exist
-    required_columns = ["System From", "System To", "Batch Job Name", "Technology", "Database/Process From", "Database/Process To"]
-    missing_columns = [col for col in required_columns if col not in df.columns]
+# Streamlit UI elements for filtering
+st.sidebar.header("Filter Options")
+system_options = pd.unique(df[['System From', 'System To']].values.ravel())
+selected_system_from = st.sidebar.selectbox("Select Source System", system_options)
+selected_system_to = st.sidebar.selectbox("Select Target System", system_options)
 
-    if missing_columns:
-        st.error(f"Missing columns in uploaded file: {', '.join(missing_columns)}")
-    else:
-        # Create dropdown options
-        system_from_options = df["System From"].dropna().unique()
-        system_to_options = df["System To"].dropna().unique()
-        batch_job_options = df["Batch Job Name"].dropna().unique()
-        technology_options = df["Technology"].dropna().unique()
-        db_from_options = df["Database/Process From"].dropna().unique()
-        db_to_options = df["Database/Process To"].dropna().unique()
+# Filter data based on user input
+valid_flows = df[
+    (df['System From'].str.upper() == selected_system_from.upper()) & 
+    (df['System To'].str.upper() == selected_system_to.upper())
+]
 
-        # Two-column layout
-        col1, col2 = st.columns(2)
+# Create unique nodes and indices
+nodes = pd.unique(valid_flows[['System From', 'System To']].values.ravel())
+node_indices = {node: i for i, node in enumerate(nodes)}
 
-        with col1:
-            system_from = st.selectbox("System From", system_from_options)
-            batch_job = st.selectbox("Batch Job Name", batch_job_options)
-            db_from = st.selectbox("Database/Process From", db_from_options)
+# Map source and target to indices
+valid_flows['source_idx'] = valid_flows['System From'].map(node_indices)
+valid_flows['target_idx'] = valid_flows['System To'].map(node_indices)
 
-        with col2:
-            system_to = st.selectbox("System To", system_to_options)
-            technology = st.selectbox("Technology", technology_options)
-            db_to = st.selectbox("Database/Process To", db_to_options)
+# Count frequency of each integration line
+sankey_links = valid_flows.groupby(['source_idx', 'target_idx']).size().reset_index(name='value')
 
-        if st.button("Submit"):
-            # Filter data based on selections
-            filtered_df = df[
-                (df["System From"] == system_from) &
-                (df["System To"] == system_to) &
-                (df["Batch Job Name"] == batch_job) &
-                (df["Technology"] == technology) &
-                (df["Database/Process From"] == db_from) &
-                (df["Database/Process To"] == db_to)
-            ]
+# Colorize links based on the technology (for example, or any other criteria)
+color_map = {
+    'Technology1': 'rgba(31, 119, 180, 0.8)', 
+    'Technology2': 'rgba(255, 127, 14, 0.8)', 
+    'Technology3': 'rgba(44, 160, 44, 0.8)', 
+    # Add more colors for each technology
+}
+valid_flows['link_color'] = valid_flows['Technology'].map(color_map).fillna('rgba(128, 128, 128, 0.8)')
 
-            if not filtered_df.empty:
-                # Define nodes: Add Technology as a middle node
-                unique_nodes = pd.unique(filtered_df[['System From', 'Technology', 'System To']].values.ravel())
-                node_indices = {node: i for i, node in enumerate(unique_nodes)}
+# Create Sankey diagram
+fig = go.Figure(data=[go.Sankey(
+    node=dict(
+        pad=15,
+        thickness=20,
+        line=dict(color="black", width=0.5),
+        label=list(nodes),
+    ),
+    link=dict(
+        source=sankey_links['source_idx'],
+        target=sankey_links['target_idx'],
+        value=sankey_links['value'],
+        color=valid_flows['link_color'].iloc[:len(sankey_links)]  # Dynamically color links
+    )
+)])
 
-                # Add source and target indices based on the node mapping
-                filtered_df['source_idx'] = filtered_df['System From'].map(node_indices)
-                filtered_df['technology_idx'] = filtered_df['Technology'].map(node_indices)
-                filtered_df['target_idx'] = filtered_df['System To'].map(node_indices)
+fig.update_layout(title_text="System Integration Lineage: {} → {}".format(selected_system_from, selected_system_to), font_size=12)
 
-                # Create Sankey links: Including links from System From -> Technology -> System To
-                sankey_links = []
-                for _, row in filtered_df.iterrows():
-                    # Link from System From to Technology
-                    sankey_links.append({"source": row['source_idx'], "target": row['technology_idx'], "value": 5})
-                    # Link from Technology to System To
-                    sankey_links.append({"source": row['technology_idx'], "target": row['target_idx'], "value": 5})
+# Display the Sankey diagram
+st.plotly_chart(fig)
 
-                # Define a color for each technology
-                color_map = {tech: f'rgba({i*40 % 255}, {i*80 % 255}, {i*120 % 255}, 0.6)' for i, tech in enumerate(filtered_df["Technology"].unique())}
+# Export Sankey diagram to HTML
+sankey_html_path = "/mnt/data/system_integration_lineage_sankey.html"
+pio.write_html(fig, sankey_html_path)
 
-                # Assign colors to links based on the technology
-                link_colors = [color_map[row["Technology"]] for _, row in filtered_df.iterrows() for _ in range(2)]
+st.markdown(f"Download the Sankey diagram HTML: [Download here]({sankey_html_path})")
 
-                # Add descriptive labels to the nodes
-                node_labels = []
-                for node in unique_nodes:
-                    if node == system_from:
-                        node_labels.append(f"System From: {node}")
-                    elif node == system_to:
-                        node_labels.append(f"System To: {node}")
-                    else:
-                        node_labels.append(node)
+# Filter only BRM as the source system for detailed breakdown
+brm_flows = valid_flows[valid_flows['System From'].str.upper() == 'BRM']
 
-                # Extract source, target, value for Plotly
-                sources = [link["source"] for link in sankey_links]
-                targets = [link["target"] for link in sankey_links]
-                values = [link["value"] for link in sankey_links]
+# Create unique nodes for BRM-related data
+brm_nodes = pd.unique(brm_flows[['System From', 'System To']].values.ravel())
+brm_node_indices = {node: i for i, node in enumerate(brm_nodes)}
 
-                # Create the Sankey diagram
-                fig = go.Figure(data=[go.Sankey(
-                    node=dict(pad=15, thickness=20, label=node_labels),
-                    link=dict(source=sources, target=targets, value=values, color=link_colors)  # Add color to links
-                )])
+# Map BRM flows to Sankey format
+brm_flows['source_idx'] = brm_flows['System From'].map(brm_node_indices)
+brm_flows['target_idx'] = brm_flows['System To'].map(brm_node_indices)
 
-                fig.update_layout(title_text="System Integration Lineage", font_size=12)
-                st.plotly_chart(fig)
-            else:
-                st.warning("No data found for the selected filters!")
+# Aggregate link values for BRM
+brm_links = brm_flows.groupby(['source_idx', 'target_idx']).size().reset_index(name='value')
+
+# Generate Sankey diagram for BRM
+fig_brm = go.Figure(data=[go.Sankey(
+    node=dict(
+        pad=15,
+        thickness=20,
+        line=dict(color="black", width=0.5),
+        label=list(brm_node_indices.keys()),
+    ),
+    link=dict(
+        source=brm_links['source_idx'],
+        target=brm_links['target_idx'],
+        value=brm_links['value'],
+    )
+)])
+
+fig_brm.update_layout(title_text="BRM System Integration Lineage", font_size=12)
+
+# Display BRM Sankey diagram
+st.plotly_chart(fig_brm)
+
+# Export BRM Sankey diagram to HTML
+brm_sankey_html_path = "/mnt/data/brm_system_integration_lineage_sankey.html"
+pio.write_html(fig_brm, brm_sankey_html_path)
+
+st.markdown(f"Download the BRM Sankey diagram HTML: [Download here]({brm_sankey_html_path})")
+
+# Filter BRM flows with technology and batch job details
+brm_detail = df[
+    (df['System From'].str.upper() == 'BRM') &
+    (df['System To'] != '') &
+    (df['Batch Job Name'] != '') &
+    (df['Technology'] != '')
+][['System From', 'Technology', 'Batch Job Name', 'System To']].copy()
+
+# Create flow: BRM → Technology → Batch Job → System To
+records = []
+for _, row in brm_detail.iterrows():
+    records.append((row['System From'], row['Technology']))
+    records.append((row['Technology'], row['Batch Job Name']))
+    records.append((row['Batch Job Name'], row['System To']))
+
+brm_lineage_df = pd.DataFrame(records, columns=['source', 'target'])
+
+# Unique nodes and mapping to indices for detailed BRM
+brm_nodes_detail = pd.unique(brm_lineage_df[['source', 'target']].values.ravel())
+brm_node_idx_detail = {node: i for i, node in enumerate(brm_nodes_detail)}
+brm_lineage_df['source_idx'] = brm_lineage_df['source'].map(brm_node_idx_detail)
+brm_lineage_df['target_idx'] = brm_lineage_df['target'].map(brm_node_idx_detail)
+
+# Count connections
+brm_links_detail = brm_lineage_df.groupby(['source_idx', 'target_idx']).size().reset_index(name='value')
+
+# Generate detailed Sankey diagram with intermediate steps (BRM → Technology → Batch Job → System To)
+fig_brm_detail = go.Figure(data=[go.Sankey(
+    node=dict(
+        pad=15,
+        thickness=20,
+        line=dict(color="black", width=0.5),
+        label=list(brm_node_idx_detail.keys())
+    ),
+    link=dict(
+        source=brm_links_detail['source_idx'],
+        target=brm_links_detail['target_idx'],
+        value=brm_links_detail['value']
+    )
+)])
+
+fig_brm_detail.update_layout(title_text="BRM Integration Lineage with Technology & Batch Jobs", font_size=12)
+
+# Display detailed BRM Sankey diagram
+st.plotly_chart(fig_brm_detail)
+
+# Export detailed BRM Sankey diagram to HTML
+brm_detailed_path = "/mnt/data/brm_detailed_lineage_sankey.html"
+pio.write_html(fig_brm_detail, brm_detailed_path)
+
+st.markdown(f"Download the Detailed BRM Sankey diagram HTML: [Download here]({brm_detailed_path})")
