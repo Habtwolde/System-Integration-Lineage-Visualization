@@ -86,11 +86,15 @@ if uploaded_file:
 
                 # Create the Sankey diagram
                 fig = go.Figure(data=[go.Sankey(
-                    node=dict(pad=15, thickness=20, label=list(unique_nodes)),
+                    node=dict(
+                        pad=15,
+                        thickness=20,
+                        label=list(unique_nodes),  # Node labels inside the diagram
+                    ),
                     link=dict(source=sources, target=targets, value=values, color=link_colors)  # Add color to links
                 )])
 
-                # Add external annotations for "System From" and "System To"
+                # Add external annotations for "System From" and "System To" outside of the Sankey diagram
                 annotations = [
                     dict(
                         x=0.1,  # Position relative to the diagram's width (left side)
@@ -109,10 +113,32 @@ if uploaded_file:
                         font=dict(size=12, color="black")
                     )
                 ]
+                
+                # Add labels for the nodes outside of the Sankey diagram (optional)
+                node_labels_outside = [
+                    dict(
+                        x=0.05,  # Position the label on the left of the "System From"
+                        y=0.7,
+                        xref="paper", yref="paper",
+                        text=f"System From Node: {system_from}",
+                        showarrow=False,
+                        font=dict(size=12, color="blue")
+                    ),
+                    dict(
+                        x=0.95,  # Position the label on the right of the "System To"
+                        y=0.7,
+                        xref="paper", yref="paper",
+                        text=f"System To Node: {system_to}",
+                        showarrow=False,
+                        font=dict(size=12, color="blue")
+                    )
+                ]
+                
+                # Update the layout with the annotations
                 fig.update_layout(
                     title_text="System Integration Lineage",
                     font_size=12,
-                    annotations=annotations
+                    annotations=annotations + node_labels_outside  # Combine external annotations
                 )
 
                 st.plotly_chart(fig)
