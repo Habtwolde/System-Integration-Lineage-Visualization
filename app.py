@@ -8,8 +8,8 @@ def load_data(uploaded_file):
         # Load the Excel file
         df = pd.read_excel(uploaded_file)
         
-        # Normalize column names (remove leading/trailing spaces)
-        df.columns = df.columns.str.strip()
+        # Normalize column names by stripping spaces and converting to lowercase
+        df.columns = df.columns.str.strip().str.replace(' ', '_').str.lower()
         
         # Print the actual column names for debugging
         st.write("Actual columns in the uploaded file:", df.columns.tolist())
@@ -27,7 +27,7 @@ if uploaded_file:
     df = load_data(uploaded_file)
     
     # Check if essential columns are present in the uploaded file
-    required_columns = ["System From", "System To", "Batch Job Name", "Technology", "Database/Process From", "Database/Process To"]
+    required_columns = ["system_from", "system_to", "batch_job_name", "technology", "database/process_from", "database/process_to"]
     missing_columns = [col for col in required_columns if col not in df.columns]
 
     if missing_columns:
@@ -37,12 +37,12 @@ if uploaded_file:
         st.subheader("Select Filters for Data Lineage")
         
         # Generate dropdown options based on the file data
-        system_from_options = df["System From"].dropna().unique()
-        system_to_options = df["System To"].dropna().unique()
-        batch_job_options = df["Batch Job Name"].dropna().unique()
-        technology_options = df["Technology"].dropna().unique()
-        db_from_options = df["Database/Process From"].dropna().unique()
-        db_to_options = df["Database/Process To"].dropna().unique()
+        system_from_options = df["system_from"].dropna().unique()
+        system_to_options = df["system_to"].dropna().unique()
+        batch_job_options = df["batch_job_name"].dropna().unique()
+        technology_options = df["technology"].dropna().unique()
+        db_from_options = df["database/process_from"].dropna().unique()
+        db_to_options = df["database/process_to"].dropna().unique()
 
         # Two columns for dropdowns layout
         col1, col2 = st.columns(2)
@@ -61,24 +61,24 @@ if uploaded_file:
         if st.button("Submit"):
             # Filter the data based on the selected dropdown values
             filtered_df = df[
-                (df["System From"] == system_from) & 
-                (df["System To"] == system_to) & 
-                (df["Batch Job Name"] == batch_job_name) &
-                (df["Technology"] == technology) & 
-                (df["Database/Process From"] == db_from) & 
-                (df["Database/Process To"] == db_to)
+                (df["system_from"] == system_from) & 
+                (df["system_to"] == system_to) & 
+                (df["batch_job_name"] == batch_job_name) &
+                (df["technology"] == technology) & 
+                (df["database/process_from"] == db_from) & 
+                (df["database/process_to"] == db_to)
             ]
             
             # Rebuild the edge list for Sankey input: System From → System To
-            sankey_df = filtered_df[['System From', 'System To']].copy()
+            sankey_df = filtered_df[['system_from', 'system_to']].copy()
             
             # Build unique list of systems
-            nodes = pd.unique(sankey_df[['System From', 'System To']].values.ravel())
+            nodes = pd.unique(sankey_df[['system_from', 'system_to']].values.ravel())
             node_indices = {node: i for i, node in enumerate(nodes)}
             
             # Map source and target to indices
-            sankey_df['source_idx'] = sankey_df['System From'].map(node_indices)
-            sankey_df['target_idx'] = sankey_df['System To'].map(node_indices)
+            sankey_df['source_idx'] = sankey_df['system_from'].map(node_indices)
+            sankey_df['target_idx'] = sankey_df['system_to'].map(node_indices)
             
             # Count frequency of each integration line
             sankey_links = sankey_df.groupby(['source_idx', 'target_idx']).size().reset_index(name='value')
