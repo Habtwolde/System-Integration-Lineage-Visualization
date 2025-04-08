@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 @st.cache_data
 def load_data(file):
     df = pd.read_excel(file, engine="openpyxl")
-    df.columns = df.columns.str.strip()  # Remove extra spaces
+    df.columns = df.columns.str.replace(r'\s+', ' ', regex=True).str.strip()  # Fix extra spaces
     return df
 
 # Upload file
