@@ -16,9 +16,6 @@ uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx"])
 if uploaded_file:
     df = load_data(uploaded_file)
     
-    # Debugging: Show column names
-    # st.write("Columns in the uploaded file:", df.columns.tolist())
-
     # Check if columns exist
     required_columns = ["System From", "System To", "Batch Job Name", "Technology", "Database/Process From", "Database/Process To"]
     missing_columns = [col for col in required_columns if col not in df.columns]
@@ -43,7 +40,7 @@ if uploaded_file:
             db_from = st.selectbox("Database/Process From", db_from_options)
 
         with col2:
-            system_to = st.selectbox("System To", system_to_options)
+            system_to = st.multiselect("System To", system_to_options)
             technology = st.selectbox("Technology", technology_options)
             db_to = st.selectbox("Database/Process To", db_to_options)
 
@@ -51,7 +48,7 @@ if uploaded_file:
             # Filter data based on selections
             filtered_df = df[
                 (df["System From"] == system_from) &
-                (df["System To"] == system_to) &
+                df["System To"].isin(system_to) &  # Allow multiple systems for "System To"
                 (df["Batch Job Name"] == batch_job) &
                 (df["Technology"] == technology) &
                 (df["Database/Process From"] == db_from) &
