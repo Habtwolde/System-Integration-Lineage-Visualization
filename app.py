@@ -2,76 +2,105 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
+# Load the Excel file
+@st.cache_data
+def load_data(file):
+    df = pd.read_excel(file, engine="openpyxl")
+    df.columns = df.columns.str.replace(r'\s+', ' ', regex=True).str.strip()  # Fix extra spaces
+    return df
+
 # Upload file
-st.title("System Data Lineage Sankey Diagram")
-uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"])
+st.title("System Integration Lineage Visualization")
+uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx"])
 
 if uploaded_file:
-    df = pd.read_excel(uploaded_file)
+    df = load_data(uploaded_file)
+    
+    # Check if columns exist
+    required_columns = ["System From", "System To", "Batch Job Name", "Technology", "Database/Process From", "Database/Process To"]
+    missing_columns = [col for col in required_columns if col not in df.columns]
 
-    # Dropdown filters
-    st.sidebar.header("Filter Options")
-    system_from = st.sidebar.multiselect("System From", df["System From"].unique())
-    system_to = st.sidebar.multiselect("System To", df["System To"].unique())
-    batch_job = st.sidebar.multiselect("Batch Job Name", df["Batch Job Name"].unique())
-    tech = st.sidebar.multiselect("Technology", df["Technology"].unique())
-    db_from = st.sidebar.multiselect("Database/Process From", df["Database/Process From"].unique())
-    db_to = st.sidebar.multiselect("Database/Process To", df["Database/Process To"].unique())
+    if missing_columns:
+        st.error(f"Missing columns in uploaded file: {', '.join(missing_columns)}")
+    else:
+        # Create dropdown options
+        system_from_options = df["System From"].dropna().unique()
+        system_to_options = df["System To"].dropna().unique()
+        batch_job_options = df["Batch Job Name"].dropna().unique()
+        technology_options = df["Technology"].dropna().unique()
+        db_from_options = df["Database/Process From"].dropna().unique()
+        db_to_options = df["Database/Process To"].dropna().unique()
 
-    # Filter logic
-    filtered_df = df.copy()
-    if system_from:
-        filtered_df = filtered_df[filtered_df["System From"].isin(system_from)]
-    if system_to:
-        filtered_df = filtered_df[filtered_df["System To"].isin(system_to)]
-    if batch_job:
-        filtered_df = filtered_df[filtered_df["Batch Job Name"].isin(batch_job)]
-    if tech:
-        filtered_df = filtered_df[filtered_df["Technology"].isin(tech)]
-    if db_from:
-        filtered_df = filtered_df[filtered_df["Database/Process From"].isin(db_from)]
-    if db_to:
-        filtered_df = filtered_df[filtered_df["Database/Process To"].isin(db_to)]
+        # Two-column layout
+        col1, col2 = st.columns(2)
 
-    if st.button("Submit"):
-        if filtered_df.empty:
-            st.warning("No data matches your filter selection.")
-        else:
-            # Build Sankey nodes and links
-            labels = []
-            for col in ["System From", "Database/Process From", "Batch Job Name", "Database/Process To", "System To"]:
-                labels.extend(filtered_df[col].dropna().unique())
-            labels = list(pd.unique(labels))
+        with col1:
+            system_from = st.selectbox("System From", system_from_options)
+            batch_job = st.selectbox("Batch Job Name", batch_job_options)
+            db_from = st.selectbox("Database/Process From", db_from_options)
 
-            def get_index(val):
-                return labels.index(val)
+        with col2:
+            system_to = st.selectbox("System To", system_to_options)
+            technology = st.selectbox("Technology", technology_options)
+            db_to = st.selectbox("Database/Process To", db_to_options)
 
-            source = []
-            target = []
-            value = []
+        if st.button("Submit"):
+            # Filter data based on selections
+            filtered_df = df[
+                (df["System From"] == system_from) &
+                (df["System To"] == system_to) &
+                (df["Batch Job Name"] == batch_job) &
+                (df["Technology"] == technology) &
+                (df["Database/Process From"] == db_from) &
+                (df["Database/Process To"] == db_to)
+            ]
 
-            for _, row in filtered_df.iterrows():
-                path = [row["System From"], row["Database/Process From"], row["Batch Job Name"],
-                        row["Database/Process To"], row["System To"]]
-                for i in range(len(path)-1):
-                    src = get_index(path[i])
-                    tgt = get_index(path[i+1])
-                    source.append(src)
-                    target.append(tgt)
-                    value.append(1)
+            if not filtered_df.empty:
+                # Define nodes: Add Technology as a middle node
+                unique_nodes = pd.unique(filtered_df[['System From', 'Technology', 'System To']].values.ravel())
+                node_indices = {node: i for i, node in enumerate(unique_nodes)}
 
-            # Sankey Diagram
-            fig = go.Figure(data=[go.Sankey(
-                node=dict(
-                    pad=15,
-                    thickness=20,
-                    line=dict(color="black", width=0.5),
-                    label=labels
-                ),
-                link=dict(
-                    source=source,
-                    target=target,
-                    value=value
-                ))])
+                # Add source and target indices based on the node mapping
+                filtered_df['source_idx'] = filtered_df['System From'].map(node_indices)
+                filtered_df['technology_idx'] = filtered_df['Technology'].map(node_indices)
+                filtered_df['target_idx'] = filtered_df['System To'].map(node_indices)
 
-            st.plotly_chart(fig, use_container_width=True)
+                # Create Sankey links: Including links from System From -> Technology -> System To
+                sankey_links = []
+                for _, row in filtered_df.iterrows():
+                    # Link from System From to Technology
+                    sankey_links.append({"source": row['source_idx'], "target": row['technology_idx'], "value": 5})
+                    # Link from Technology to System To
+                    sankey_links.append({"source": row['technology_idx'], "target": row['target_idx'], "value": 5})
+
+                # Define a color for each technology
+                color_map = {tech: f'rgba({i*40 % 255}, {i*80 % 255}, {i*120 % 255}, 0.6)' for i, tech in enumerate(filtered_df["Technology"].unique())}
+
+                # Assign colors to links based on the technology
+                link_colors = [color_map[row["Technology"]] for _, row in filtered_df.iterrows() for _ in range(2)]
+
+                # Add descriptive labels to the nodes
+                node_labels = []
+                for node in unique_nodes:
+                    if node == system_from:
+                        node_labels.append(f"System From: {node}")
+                    elif node == system_to:
+                        node_labels.append(f"System To: {node}")
+                    else:
+                        node_labels.append(node)
+
+                # Extract source, target, value for Plotly
+                sources = [link["source"] for link in sankey_links]
+                targets = [link["target"] for link in sankey_links]
+                values = [link["value"] for link in sankey_links]
+
+                # Create the Sankey diagram
+                fig = go.Figure(data=[go.Sankey(
+                    node=dict(pad=15, thickness=20, label=node_labels),
+                    link=dict(source=sources, target=targets, value=values, color=link_colors)  # Add color to links
+                )])
+
+                fig.update_layout(title_text="System Integration Lineage", font_size=12)
+                st.plotly_chart(fig)
+            else:
+                st.warning("No data found for the selected filters!")
