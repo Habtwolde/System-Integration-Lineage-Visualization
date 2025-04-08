@@ -65,95 +65,33 @@ if uploaded_file:
                 unique_nodes = pd.unique(filtered_df[['System From', 'Technology', 'System To']].values.ravel())
                 node_indices = {node: i for i, node in enumerate(unique_nodes)}
 
-                # Create directed links
-                links = []
-                annotations = []
-                x_positions = {}
-                y_positions = {}
-                spacing = 200  # Adjust spacing for readability
-
-                # Assign positions for nodes
-                for i, node in enumerate(unique_nodes):
-                    if node in filtered_df["System From"].values:
-                        x_positions[node] = 0
-                    elif node in filtered_df["Technology"].values:
-                        x_positions[node] = spacing
-                    elif node in filtered_df["System To"].values:
-                        x_positions[node] = spacing * 2
-                    y_positions[node] = i * 100
+                # Create Sankey links
+                sankey_links = []
 
                 for _, row in filtered_df.iterrows():
-                    source = row["System From"]
-                    tech = row["Technology"]
-                    target = row["System To"]
+                    source_idx = node_indices[row["System From"]]
+                    tech_idx = node_indices[row["Technology"]]
+                    target_idx = node_indices[row["System To"]]
 
-                    # Add arrows for flow direction
-                    links.append(
-                        go.Scatter(
-                            x=[x_positions[source], x_positions[tech]],
-                            y=[y_positions[source], y_positions[tech]],
-                            mode="lines+markers",
-                            line=dict(width=2, color="blue"),
-                            marker=dict(size=10),
-                            name=f"{source} → {tech}",
-                        )
-                    )
+                    # Create links from System From to Technology and from Technology to System To
+                    sankey_links.append({"source": source_idx, "target": tech_idx, "value": 5})  # Stronger weight
+                    sankey_links.append({"source": tech_idx, "target": target_idx, "value": 5})
 
-                    links.append(
-                        go.Scatter(
-                            x=[x_positions[tech], x_positions[target]],
-                            y=[y_positions[tech], y_positions[target]],
-                            mode="lines+markers",
-                            line=dict(width=2, color="green"),
-                            marker=dict(size=10),
-                            name=f"{tech} → {target}",
-                        )
-                    )
+                    # Add a direct link from System From to System To (direct connection)
+                    sankey_links.append({"source": source_idx, "target": target_idx, "value": 5})  # Direct link
 
-                    # Add labels
-                    annotations.append(
-                        dict(
-                            x=x_positions[source],
-                            y=y_positions[source],
-                            xref="x",
-                            yref="y",
-                            text=source,
-                            showarrow=True,
-                            arrowhead=2,
-                        )
-                    )
-                    annotations.append(
-                        dict(
-                            x=x_positions[tech],
-                            y=y_positions[tech],
-                            xref="x",
-                            yref="y",
-                            text=tech,
-                            showarrow=True,
-                            arrowhead=2,
-                        )
-                    )
-                    annotations.append(
-                        dict(
-                            x=x_positions[target],
-                            y=y_positions[target],
-                            xref="x",
-                            yref="y",
-                            text=target,
-                            showarrow=True,
-                            arrowhead=2,
-                        )
-                    )
+                # Extract source, target, and value for Plotly
+                sources = [link["source"] for link in sankey_links]
+                targets = [link["target"] for link in sankey_links]
+                values = [link["value"] for link in sankey_links]
 
-                # Create the flow diagram
-                fig = go.Figure(data=links)
-                fig.update_layout(
-                    title_text="System Integration Flow",
-                    font_size=12,
-                    annotations=annotations,
-                    showlegend=False,
-                )
+                # Create the Sankey diagram
+                fig = go.Figure(data=[go.Sankey(
+                    node=dict(pad=15, thickness=20, label=list(unique_nodes)),
+                    link=dict(source=sources, target=targets, value=values)
+                )])
 
+                fig.update_layout(title_text="System Integration Lineage", font_size=12)
                 st.plotly_chart(fig)
             else:
                 st.warning("No data found for the selected filters!")
