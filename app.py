@@ -15,79 +15,74 @@ uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx"])
 
 if uploaded_file:
     df = load_data(uploaded_file)
+    
+    # Debugging: Show column names
+    # st.write("Columns in the uploaded file:", df.columns.tolist())
 
-    # Check if required columns exist
+    # Check if columns exist
     required_columns = ["System From", "System To", "Batch Job Name", "Technology", "Database/Process From", "Database/Process To"]
     missing_columns = [col for col in required_columns if col not in df.columns]
 
     if missing_columns:
         st.error(f"Missing columns in uploaded file: {', '.join(missing_columns)}")
     else:
-        # Create dropdown options based on uploaded data
+        # Create dropdown options
         system_from_options = df["System From"].dropna().unique()
-        
-        # User selects 'System From' first
-        system_from = st.selectbox("System From", system_from_options)
-
-        # Filter data based on selected 'System From'
-        filtered_df = df[df["System From"] == system_from]
-
-        batch_job_options = filtered_df["Batch Job Name"].dropna().unique()
-        technology_options = filtered_df["Technology"].dropna().unique()
-        system_to_options = filtered_df["System To"].dropna().unique()
-        db_from_options = filtered_df["Database/Process From"].dropna().unique()
-        db_to_options = filtered_df["Database/Process To"].dropna().unique()
+        system_to_options = df["System To"].dropna().unique()
+        batch_job_options = df["Batch Job Name"].dropna().unique()
+        technology_options = df["Technology"].dropna().unique()
+        db_from_options = df["Database/Process From"].dropna().unique()
+        db_to_options = df["Database/Process To"].dropna().unique()
 
         # Two-column layout
         col1, col2 = st.columns(2)
 
         with col1:
+            system_from = st.selectbox("System From", system_from_options)
             batch_job = st.selectbox("Batch Job Name", batch_job_options)
             db_from = st.selectbox("Database/Process From", db_from_options)
 
         with col2:
-            technology = st.selectbox("Technology", technology_options)
             system_to = st.selectbox("System To", system_to_options)
+            technology = st.selectbox("Technology", technology_options)
             db_to = st.selectbox("Database/Process To", db_to_options)
 
         if st.button("Submit"):
-            # Apply filters
-            filtered_df = filtered_df[
-                (filtered_df["System To"] == system_to) &
-                (filtered_df["Batch Job Name"] == batch_job) &
-                (filtered_df["Technology"] == technology) &
-                (filtered_df["Database/Process From"] == db_from) &
-                (filtered_df["Database/Process To"] == db_to)
+            # Filter data based on selections
+            filtered_df = df[
+                (df["System From"] == system_from) &
+                (df["System To"] == system_to) &
+                (df["Batch Job Name"] == batch_job) &
+                (df["Technology"] == technology) &
+                (df["Database/Process From"] == db_from) &
+                (df["Database/Process To"] == db_to)
             ]
 
             if not filtered_df.empty:
-                # Define nodes (System From → Technology → System To)
+                # Define nodes: Add Technology as a middle node
                 unique_nodes = pd.unique(filtered_df[['System From', 'Technology', 'System To']].values.ravel())
                 node_indices = {node: i for i, node in enumerate(unique_nodes)}
 
-                # Create Sankey links and colors
-                sankey_links = []
-                link_colors = []
+                # Add source and target indices based on the node mapping
+                filtered_df['source_idx'] = filtered_df['System From'].map(node_indices)
+                filtered_df['technology_idx'] = filtered_df['Technology'].map(node_indices)
+                filtered_df['target_idx'] = filtered_df['System To'].map(node_indices)
 
-                # Define a color for each technology to identify each line
+                # Create Sankey links: Including links from System From -> Technology -> System To
+                sankey_links = []
+                for _, row in filtered_df.iterrows():
+                    # Link from System From to Technology
+                    sankey_links.append({"source": row['source_idx'], "target": row['technology_idx'], "value": 5})
+                    # Link from Technology to System To
+                    sankey_links.append({"source": row['technology_idx'], "target": row['target_idx'], "value": 5})
+
+                # Define a color for each technology
                 color_map = {tech: f'rgba({i*40 % 255}, {i*80 % 255}, {i*120 % 255}, 0.6)' for i, tech in enumerate(filtered_df["Technology"].unique())}
 
-                for _, row in filtered_df.iterrows():
-                    source_idx = node_indices[row["System From"]]
-                    tech_idx = node_indices[row["Technology"]]
-                    target_idx = node_indices[row["System To"]]
+                # Assign colors to links based on the technology
+                link_colors = [color_map[row["Technology"]] for _, row in filtered_df.iterrows() for _ in range(2)]
 
-                    # Create links from System From to Technology and from Technology to System To
-                    sankey_links.append({"source": source_idx, "target": tech_idx, "value": 5})  # Stronger weight
-                    sankey_links.append({"source": tech_idx, "target": target_idx, "value": 5})
-
-                    # Add a direct link from System From to System To (direct connection)
-                    sankey_links.append({"source": source_idx, "target": target_idx, "value": 5})  # Direct link
-
-                    # Color the links based on the technology
-                    link_colors.extend([color_map[row["Technology"]]] * 3)  # Add color for each link
-
-                # Extract source, target, and value for Plotly
+                # Extract source, target, value for Plotly
                 sources = [link["source"] for link in sankey_links]
                 targets = [link["target"] for link in sankey_links]
                 values = [link["value"] for link in sankey_links]
