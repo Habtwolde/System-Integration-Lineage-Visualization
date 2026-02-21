@@ -109,6 +109,18 @@ Coloring is stable and reproducible:
 
 ---
 
+## Screenshots (placeholders)
+
+<p align="center">
+  <img src="https://placehold.co/1100x550?text=Upload+%2B+Filters+UI" alt="UI placeholder" />
+</p>
+
+<p align="center">
+  <img src="https://placehold.co/1100x550?text=Sankey+Lineage+Diagram" alt="Sankey placeholder" />
+</p>
+
+---
+
 ## Repository structure
 
 ```
